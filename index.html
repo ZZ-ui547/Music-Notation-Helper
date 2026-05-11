@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Score Editor</title>
-  <script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.4/dist/abcjs-basic-min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.4/dist/abcjs-min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -96,6 +96,23 @@
       white-space: nowrap;
     }
     #clear-btn:hover { color: #c00; border-color: #c00; }
+
+    #play-btn {
+      flex-shrink: 0;
+      padding: 6px 14px;
+      background: none;
+      color: #444;
+      border: 1px solid #bbb;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+      min-height: 32px;
+      white-space: nowrap;
+    }
+    #play-btn:hover:not(:disabled) { color: #060; border-color: #060; }
+    #play-btn.playing { color: #c00; border-color: #c00; }
+    #play-btn.playing:hover:not(:disabled) { color: #900; border-color: #900; }
+    #play-btn:disabled { opacity: 0.5; cursor: default; }
 
     /* ── Tab bar (mobile only) ────────────────────────────── */
     #tab-bar {
@@ -200,6 +217,7 @@
 
       #export-btn { order: 0; min-height: 40px; font-size: 14px; padding: 8px 14px; }
       #clear-btn  { order: 0; min-height: 40px; font-size: 14px; padding: 8px 14px; }
+      #play-btn   { order: 0; min-height: 40px; font-size: 14px; padding: 8px 14px; }
 
       .sep { display: none; }
 
@@ -283,10 +301,10 @@
     <select id="transpose-select" aria-label="Instrument">
       <option value="0">Concert (C)</option>
       <option value="0">Violin</option>
-      <option value="2">B♭ — Trumpet, Clarinet, Sop./Ten. Sax</option>
-      <option value="9">E♭ — Alto / Bari Sax</option>
-      <option value="7">F — French Horn</option>
-      <option value="custom">Custom…</option>
+      <option value="2">B&#9837; &mdash; Trumpet, Clarinet, Sop./Ten. Sax</option>
+      <option value="9">E&#9837; &mdash; Alto / Bari Sax</option>
+      <option value="7">F &mdash; French Horn</option>
+      <option value="custom">Custom&hellip;</option>
     </select>
   </div>
   <div class="ctrl" id="custom-ctrl" style="display:none">
@@ -298,6 +316,7 @@
     <label for="bars-input">Bars / line</label>
     <input type="number" id="bars-input" aria-label="Bars per line" value="4" min="1" max="20" style="width:54px">
   </div>
+  <button id="play-btn">&#9654; Play</button>
   <button id="clear-btn">Clear</button>
   <button id="export-btn">Export PDF</button>
 </div>
@@ -337,6 +356,23 @@ K:C
   const barsInput  = document.getElementById('bars-input');
   const exportBtn  = document.getElementById('export-btn');
   const clearBtn   = document.getElementById('clear-btn');
+  const playBtn    = document.getElementById('play-btn');
+
+  let visualObj    = null;
+  let activeSynth  = null;
+  let playEndTimer = null;
+
+  function stopPlayback() {
+    if (activeSynth) {
+      try { activeSynth.stop(); } catch(e) {}
+      activeSynth = null;
+    }
+    clearTimeout(playEndTimer);
+    playEndTimer = null;
+    playBtn.textContent = '▶ Play';
+    playBtn.classList.remove('playing');
+    playBtn.disabled = false;
+  }
 
   function transpose() {
     return transpSel.value === 'custom'
@@ -345,7 +381,8 @@ K:C
   }
 
   function render() {
-    ABCJS.renderAbc('score-output', abcInput.value, {
+    stopPlayback();
+    const result = ABCJS.renderAbc('score-output', abcInput.value, {
       responsive:      'resize',
       visualTranspose: transpose(),
       barsperstaff:    parseInt(barsInput.value) || 4,
@@ -353,6 +390,7 @@ K:C
       paddingright:    0,
       paddingtop:      0,
     });
+    visualObj = result && result.length ? result[0] : null;
   }
 
   // ── PDF pagination ──────────────────────────────────────
@@ -520,6 +558,38 @@ K:C
     const hidden = document.querySelector('#score-output svg[data-print-hidden]');
     if (hidden) { hidden.style.display = ''; delete hidden.dataset.printHidden; }
   }
+
+  async function togglePlayback() {
+    if (activeSynth) { stopPlayback(); return; }
+    if (!visualObj) return;
+    if (!ABCJS.synth || !ABCJS.synth.supportsAudio()) {
+      alert('Audio playback is not supported in this browser.');
+      return;
+    }
+
+    playBtn.textContent = 'Loading…';
+    playBtn.disabled = true;
+
+    try {
+      const synth = new ABCJS.synth.CreateSynth();
+      await synth.init({ visualObj });
+      const primed = await synth.prime();
+
+      activeSynth = synth;
+      playBtn.textContent = '■ Stop';
+      playBtn.classList.add('playing');
+      playBtn.disabled = false;
+      synth.start();
+
+      const ms = primed && primed.duration ? primed.duration * 1000 + 300 : null;
+      if (ms) playEndTimer = setTimeout(() => { if (activeSynth === synth) stopPlayback(); }, ms);
+    } catch(e) {
+      console.warn('Playback failed:', e);
+      stopPlayback();
+    }
+  }
+
+  playBtn.addEventListener('click', togglePlayback);
 
   clearBtn.addEventListener('click', () => {
     if (abcInput.value && !confirm('Clear all ABC notation?')) return;
