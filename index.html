@@ -83,6 +83,20 @@
     }
     #export-btn:hover { background: #333; }
 
+    #clear-btn {
+      flex-shrink: 0;
+      padding: 6px 14px;
+      background: none;
+      color: #888;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+      min-height: 32px;
+      white-space: nowrap;
+    }
+    #clear-btn:hover { color: #c00; border-color: #c00; }
+
     /* ── Tab bar (mobile only) ────────────────────────────── */
     #tab-bar {
       display: none;
@@ -185,6 +199,7 @@
       #toolbar h1 { flex: 1; order: 0; }
 
       #export-btn { order: 0; min-height: 40px; font-size: 14px; padding: 8px 14px; }
+      #clear-btn  { order: 0; min-height: 40px; font-size: 14px; padding: 8px 14px; }
 
       .sep { display: none; }
 
@@ -283,6 +298,7 @@
     <label for="bars-input">Bars / line</label>
     <input type="number" id="bars-input" aria-label="Bars per line" value="4" min="1" max="20" style="width:54px">
   </div>
+  <button id="clear-btn">Clear</button>
   <button id="export-btn">Export PDF</button>
 </div>
 
@@ -320,6 +336,7 @@ K:C
   const customSemi = document.getElementById('custom-semi');
   const barsInput  = document.getElementById('bars-input');
   const exportBtn  = document.getElementById('export-btn');
+  const clearBtn   = document.getElementById('clear-btn');
 
   function transpose() {
     return transpSel.value === 'custom'
@@ -503,6 +520,12 @@ K:C
     const hidden = document.querySelector('#score-output svg[data-print-hidden]');
     if (hidden) { hidden.style.display = ''; delete hidden.dataset.printHidden; }
   }
+
+  clearBtn.addEventListener('click', () => {
+    if (abcInput.value && !confirm('Clear all ABC notation?')) return;
+    abcInput.value = '';
+    render();
+  });
 
   exportBtn.addEventListener('click', () => {
     buildPrintPages();
