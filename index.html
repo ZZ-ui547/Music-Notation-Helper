@@ -358,14 +358,19 @@ K:C
   const clearBtn   = document.getElementById('clear-btn');
   const playBtn    = document.getElementById('play-btn');
 
-  let visualObj    = null;
-  let activeSynth  = null;
-  let playEndTimer = null;
+  let visualObj      = null;
+  let activeSynth    = null;
+  let activeAudioCtx = null;
+  let playEndTimer   = null;
 
   function stopPlayback() {
     if (activeSynth) {
       try { activeSynth.stop(); } catch(e) {}
       activeSynth = null;
+    }
+    if (activeAudioCtx) {
+      try { activeAudioCtx.close(); } catch(e) {}
+      activeAudioCtx = null;
     }
     clearTimeout(playEndTimer);
     playEndTimer = null;
@@ -570,9 +575,19 @@ K:C
     playBtn.textContent = 'Loading…';
     playBtn.disabled = true;
 
+    // Create AudioContext synchronously inside the click handler.
+    // Safari requires the context to be created as part of a user gesture;
+    // letting abcjs create it inside an async chain fails on iOS/Safari.
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new AudioCtx();
+    activeAudioCtx = audioContext;
+
     try {
+      // Safari sometimes starts a new context in 'suspended' state.
+      if (audioContext.state === 'suspended') await audioContext.resume();
+
       const synth = new ABCJS.synth.CreateSynth();
-      await synth.init({ visualObj });
+      await synth.init({ visualObj, audioContext });
       const primed = await synth.prime();
 
       activeSynth = synth;
