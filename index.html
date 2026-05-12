@@ -399,13 +399,8 @@ K:C
   }
 
   // ── PDF pagination ──────────────────────────────────────
-  // Finds staff row boundaries by analysing the vertical extents of all
-  // rendered SVG elements. This avoids relying on abcjs internal class
-  // names (which vary across versions) and works on any SVG output.
   function findStaffRows(svg) {
     const vb = svg.viewBox.baseVal;
-
-    // Try known abcjs class names first (fast path)
     for (const sel of ['.abcjs-staff-group', '.abcjs-row', '.abcjs-system', '.abcjs-staff']) {
       const els = [...svg.querySelectorAll(sel)].filter(el => {
         try { const b = el.getBBox(); return b.width > vb.width * 0.25 && b.height > 5; }
@@ -417,9 +412,6 @@ K:C
           .sort((a, b) => a.top - b.top);
       }
     }
-
-    // Fallback: collect all leaf-element bboxes, merge them into bands,
-    // then split bands at large vertical gaps (= inter-row whitespace).
     const intervals = [];
     svg.querySelectorAll('path, rect, use, text, line, ellipse, circle, polygon').forEach(el => {
       try {
@@ -427,25 +419,17 @@ K:C
         if (b.height > 0.5 && b.width > 0.5) intervals.push([b.y, b.y + b.height]);
       } catch {}
     });
-
     if (!intervals.length) return [];
     intervals.sort((a, b) => a[0] - b[0]);
-
-    // Merge intervals that are within 2 SVG units of each other
     const merged = [[...intervals[0]]];
     for (const [s, e] of intervals.slice(1)) {
       const last = merged[merged.length - 1];
       if (s <= last[1] + 2) { last[1] = Math.max(last[1], e); }
       else { merged.push([s, e]); }
     }
-
-    // Use 2% of SVG *width* as the minimum inter-row gap.
-    // vb.height * % fails for tall scores (many rows shrinks % below actual gaps);
-    // vb.width stays proportional to staff size regardless of row count.
     const minGap = Math.max(vb.width * 0.02, 8);
     const rows = [];
     let rowTop = 0, rowBottom = merged[0][1];
-
     for (let i = 1; i < merged.length; i++) {
       if (merged[i][0] - merged[i - 1][1] >= minGap) {
         rows.push({ top: rowTop, bottom: rowBottom });
@@ -454,49 +438,29 @@ K:C
       rowBottom = merged[i][1];
     }
     rows.push({ top: rowTop, bottom: rowBottom });
-
-    // Extend first row's top to 0 to include title/header above staves
     if (rows.length) rows[0].top = 0;
     return rows;
   }
 
   function buildPrintPages() {
     const output = document.getElementById('score-output');
-
-    // If already paginated (e.g. Export button ran, then beforeprint fires too)
-    // just leave the existing pages in place.
     if (document.getElementById('print-pages')) return;
-
-    // Restore any SVG hidden by a previous call that wasn't cleaned up.
     const prevHidden = output.querySelector('svg[data-print-hidden]');
     if (prevHidden) { prevHidden.style.display = ''; delete prevHidden.dataset.printHidden; }
-
-    // On mobile the score panel may be hidden (Editor tab active).
-    // getBBox() returns zeros on hidden elements, so temporarily reveal it.
     const scorePanel = document.getElementById('score-panel');
     const panelHidden = window.getComputedStyle(scorePanel).display === 'none';
     if (panelHidden) {
       scorePanel.style.display = 'flex';
       scorePanel.style.visibility = 'hidden';
     }
-
     try {
       const svg = output.querySelector('svg');
       if (!svg) return;
-
       const vb = svg.viewBox.baseVal;
       if (!vb || vb.width === 0) return;
-
-      // A4 with 15mm margins → 180 mm × 267 mm usable.
-      // Use 252 mm (not 267) to leave ~15 mm buffer for browser-added
-      // headers/footers (e.g. iOS Safari URL + page-number lines).
       const pageH = vb.width * (252 / 180);
-
       const rows = findStaffRows(svg);
       if (!rows.length || rows.at(-1).bottom <= pageH) return;
-
-      // Group rows into pages (each page holds rows whose cumulative
-      // height from the page's start row fits within pageH)
       const pagesRows = [];
       let currentPage = [], pageStart = 0;
       for (const row of rows) {
@@ -510,45 +474,29 @@ K:C
       }
       if (currentPage.length) pagesRows.push(currentPage);
       if (pagesRows.length < 2) return;
-
       svg.dataset.printHidden = '1';
       svg.style.display = 'none';
-
       const svgHTML   = svg.innerHTML;
       const container = document.createElement('div');
       container.id    = 'print-pages';
-
       pagesRows.forEach((pageRows, i) => {
         const isFirst = i === 0;
         const isLast  = i === pagesRows.length - 1;
-
-        // Clip at the midpoint of the inter-row gap rather than at
-        // row.bottom, so elements that straddle the boundary (e.g. high
-        // notes whose bbox extends slightly above the next row's top)
-        // don't bleed onto the wrong page.
-        const clipY = isFirst
-          ? 0
-          : (pagesRows[i - 1].at(-1).bottom + pageRows[0].top) / 2;
-        const clipEnd = isLast
-          ? pageRows.at(-1).bottom
-          : (pageRows.at(-1).bottom + pagesRows[i + 1][0].top) / 2;
+        const clipY = isFirst ? 0 : (pagesRows[i - 1].at(-1).bottom + pageRows[0].top) / 2;
+        const clipEnd = isLast ? pageRows.at(-1).bottom : (pageRows.at(-1).bottom + pagesRows[i + 1][0].top) / 2;
         const clipH = clipEnd - clipY;
-
         const div = document.createElement('div');
         div.className = 'print-page';
         if (!isFirst) div.style.cssText = 'break-before:page;page-break-before:always';
-
         const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         s.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
         s.setAttribute('viewBox', `${vb.x} ${clipY} ${vb.width} ${clipH}`);
         s.setAttribute('overflow', 'hidden');
         s.style.cssText = 'width:100%;height:auto;display:block';
         s.innerHTML = svgHTML;
-
         div.appendChild(s);
         container.appendChild(div);
       });
-
       output.appendChild(container);
     } finally {
       if (panelHidden) {
@@ -567,8 +515,13 @@ K:C
   async function togglePlayback() {
     if (activeSynth) { stopPlayback(); return; }
     if (!visualObj) return;
-    if (!ABCJS.synth || !ABCJS.synth.supportsAudio()) {
-      alert('Audio playback is not supported in this browser.');
+
+    if (!ABCJS.synth) {
+      alert('Audio not available: ABCJS.synth is undefined (build may not include audio support).');
+      return;
+    }
+    if (!ABCJS.synth.supportsAudio()) {
+      alert('Audio not supported in this browser (ABCJS.synth.supportsAudio() = false).');
       return;
     }
 
@@ -601,6 +554,7 @@ K:C
     } catch(e) {
       console.warn('Playback failed:', e);
       stopPlayback();
+      alert('Playback failed: ' + (e && e.message ? e.message : String(e)));
     }
   }
 
@@ -620,7 +574,6 @@ K:C
   window.addEventListener('beforeprint', buildPrintPages);
   window.addEventListener('afterprint',  restoreAfterPrint);
 
-  // ── Controls ────────────────────────────────────────────
   transpSel.addEventListener('change', () => {
     customCtrl.style.display = transpSel.value === 'custom' ? 'flex' : 'none';
     render();
@@ -630,7 +583,6 @@ K:C
   barsInput.addEventListener('input', render);
   abcInput.addEventListener('input', render);
 
-  // ── Tab switching (mobile) ───────────────────────────────
   document.getElementById('tab-bar').addEventListener('click', e => {
     const btn = e.target.closest('.tab');
     if (!btn) return;
