@@ -1,4 +1,4 @@
-const CACHE = 'score-editor-v1';
+const CACHE = 'score-editor-v2';
 
 const PRECACHE = [
   './',
