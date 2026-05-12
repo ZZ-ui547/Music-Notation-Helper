@@ -206,7 +206,6 @@
 
     /* ── Mobile ───────────────────────────────────────────── */
     @media (max-width: 640px) {
-      /* Toolbar: two rows */
       #toolbar {
         flex-wrap: wrap;
         gap: 8px 10px;
@@ -221,25 +220,16 @@
 
       .sep { display: none; }
 
-      /* Controls go to row 2 */
       .ctrl { order: 1; flex-shrink: 1; }
-
-      /* Hide text labels — self-evident on mobile, and they caused overlap
-         because width:100% on the select was relative to the full ctrl width
-         (label + select), making the two together overflow the row */
       .ctrl label { display: none; }
 
-      /* Instrument select fills row 2 — safe now that label is hidden */
       #ctrl-instrument { flex: 1; min-width: 0; }
       #ctrl-instrument select { width: 100%; min-width: 0; }
 
-      /* Bars input stays compact */
       #ctrl-bars { flex-shrink: 0; }
 
-      /* Prevent iOS input zoom (inputs < 16px trigger auto-zoom) */
       select, input[type="number"] { font-size: 16px; min-height: 40px; }
 
-      /* Tabs + panels */
       #tab-bar { display: flex; }
 
       #main { position: relative; }
@@ -528,19 +518,15 @@ K:C
     playBtn.textContent = 'Loading…';
     playBtn.disabled = true;
 
-    // Create AudioContext synchronously inside the click handler.
-    // Safari requires the context to be created as part of a user gesture;
-    // letting abcjs create it inside an async chain fails on iOS/Safari.
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     const audioContext = new AudioCtx();
     activeAudioCtx = audioContext;
 
     try {
-      // Safari sometimes starts a new context in 'suspended' state.
       if (audioContext.state === 'suspended') await audioContext.resume();
 
       const synth = new ABCJS.synth.CreateSynth();
-      await synth.init({ visualObj, audioContext });
+      await synth.init({ visualObj, audioContext, options: {} });
       const primed = await synth.prime();
 
       activeSynth = synth;
