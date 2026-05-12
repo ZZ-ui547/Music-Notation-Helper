@@ -326,6 +326,7 @@ M:4/4
 L:1/8
 Q:1/4=120
 K:C
+%% Use "^text" for tempo/expression marks (^ = display only, not played as chord)
 |:CDEF GABc|dedB AGFE|DCDE FGAB|cBAG FEDC:|
 |:c2ec B2dB|A2FA G2EG|FGAB cdef|gedB c3B:|
 |:AGFE DCBA,|B,CDE FGAB|cBAG FEDC|DEFD C4:|</textarea>
@@ -505,24 +506,23 @@ K:C
   async function togglePlayback() {
     if (activeSynth) { stopPlayback(); return; }
     if (!visualObj) return;
-
-    if (!ABCJS.synth) {
-      alert('Audio not available: ABCJS.synth is undefined (build may not include audio support).');
-      return;
-    }
-    if (!ABCJS.synth.supportsAudio()) {
-      alert('Audio not supported in this browser (ABCJS.synth.supportsAudio() = false).');
+    if (!ABCJS.synth || !ABCJS.synth.supportsAudio()) {
+      alert('Audio playback is not supported in this browser.');
       return;
     }
 
     playBtn.textContent = 'Loading…';
     playBtn.disabled = true;
 
+    // Create AudioContext synchronously inside the click handler.
+    // Safari requires the context to be created as part of a user gesture;
+    // letting abcjs create it inside an async chain fails on iOS/Safari.
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     const audioContext = new AudioCtx();
     activeAudioCtx = audioContext;
 
     try {
+      // Safari sometimes starts a new context in 'suspended' state.
       if (audioContext.state === 'suspended') await audioContext.resume();
 
       const synth = new ABCJS.synth.CreateSynth();
@@ -540,7 +540,6 @@ K:C
     } catch(e) {
       console.warn('Playback failed:', e);
       stopPlayback();
-      alert('Playback failed: ' + (e && e.message ? e.message : String(e)));
     }
   }
 
