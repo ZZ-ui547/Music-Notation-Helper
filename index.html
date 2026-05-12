@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Score Editor</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Score Editor">
+  <link rel="apple-touch-icon" href="icon.svg">
   <script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.4/dist/abcjs-basic-min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -378,6 +383,7 @@ K:C
 
   function render() {
     stopPlayback();
+    localStorage.setItem('score-editor-abc', abcInput.value);
     const result = ABCJS.renderAbc('score-output', abcInput.value, {
       responsive:      'resize',
       visualTranspose: transpose(),
@@ -514,15 +520,11 @@ K:C
     playBtn.textContent = 'Loading…';
     playBtn.disabled = true;
 
-    // Create AudioContext synchronously inside the click handler.
-    // Safari requires the context to be created as part of a user gesture;
-    // letting abcjs create it inside an async chain fails on iOS/Safari.
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     const audioContext = new AudioCtx();
     activeAudioCtx = audioContext;
 
     try {
-      // Safari sometimes starts a new context in 'suspended' state.
       if (audioContext.state === 'suspended') await audioContext.resume();
 
       const synth = new ABCJS.synth.CreateSynth();
@@ -548,6 +550,7 @@ K:C
   clearBtn.addEventListener('click', () => {
     if (abcInput.value && !confirm('Clear all ABC notation?')) return;
     abcInput.value = '';
+    localStorage.removeItem('score-editor-abc');
     render();
   });
 
@@ -578,7 +581,14 @@ K:C
     if (btn.dataset.panel === 'score-panel') render();
   });
 
+  // Restore last session, then render
+  const saved = localStorage.getItem('score-editor-abc');
+  if (saved !== null) abcInput.value = saved;
   render();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(console.warn);
+  }
 </script>
 
 </body>

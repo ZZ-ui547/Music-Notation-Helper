@@ -1,0 +1,17 @@
+{
+  "name": "Score Editor",
+  "short_name": "Score Editor",
+  "description": "ABC notation scoresheet editor with PDF export and audio preview",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#e4e4e4",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
