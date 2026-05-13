@@ -525,15 +525,29 @@ K:C
     const audioContext = new AudioCtx();
     activeAudioCtx = audioContext;
 
-    // iOS Safari: play a silent 1-sample buffer synchronously to keep the audio
-    // session "unlocked" through subsequent async awaits. Without this the context
-    // can silently re-suspend between await synth.init() and synth.start().
+    // iOS Safari: play a silent Web Audio buffer synchronously to keep the
+    // AudioContext unlocked through subsequent async awaits.
     try {
-      const silentBuf = audioContext.createBuffer(1, 1, audioContext.sampleRate);
-      const silentSrc = audioContext.createBufferSource();
-      silentSrc.buffer = silentBuf;
-      silentSrc.connect(audioContext.destination);
-      silentSrc.start(0);
+      const buf = audioContext.createBuffer(1, 1, audioContext.sampleRate);
+      const src = audioContext.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioContext.destination);
+      src.start(0);
+    } catch (_) {}
+
+    // iOS mute-switch workaround: playing a silent <audio> element switches iOS
+    // from the "ambient" audio session (silenced by mute switch) to "playback"
+    // (ignores it) — the same mechanism Spotify/YouTube use.
+    try {
+      const wav = new Uint8Array([
+        82,73,70,70,37,0,0,0,87,65,86,69,102,109,116,32,
+        16,0,0,0,1,0,1,0,68,172,0,0,68,172,0,0,1,0,8,0,
+        100,97,116,97,1,0,0,0,128
+      ]);
+      const blobUrl = URL.createObjectURL(new Blob([wav], {type:'audio/wav'}));
+      const audioEl = Object.assign(new Audio(blobUrl), {volume: 0});
+      await audioEl.play().catch(() => {});
+      URL.revokeObjectURL(blobUrl);
     } catch (_) {}
 
     try {
